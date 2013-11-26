@@ -1,0 +1,407 @@
+<?php
+
+/**
+ * @file
+ * Provides a SagePay Form payment method for Drupal Commerce.
+ */
+
+
+/**
+ * Implements hook_commerce_payment_method_info().
+ */
+function commerce_veritrans_commerce_payment_method_info() {
+  $payment_methods = array();
+
+  $payment_methods['commerce_veritrans'] = array(
+    'title' => t('Credit Card (via Veritrans)'),
+    'description' => t('Integration with Veritrans using VT-Direct.'),
+    'active' => TRUE,
+    'offsite' => TRUE,
+    'active' => TRUE,
+    'callbacks' => array()
+  );
+
+  return $payment_methods;
+}
+
+/** 
+ * Settings form for SagePay payment method. Used to set vendor name and 
+ * secret key within Rules settings.
+ */
+function commerce_veritrans_settings_form($settings = NULL) {
+  $form = array();
+
+  // Merge default settings into the stored settings array.
+  $settings = (array) $settings + array(
+    'merchant_id' => '',
+    'merchant_hashkey' => '',
+    'vendor_email' => '',
+  );
+
+  $form['merchant_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Merchant ID'),
+    '#description' => t('This is your Merchant ID that you get from your Veritrans account'),
+    '#default_value' => $settings['merchant_id'],
+    '#required' => TRUE,
+  );
+
+  $form['merchant_hashkey'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Merchant Hash Key'),
+    '#description' => t('This is your Merchant Hash that you get from your Veritrans account'),
+    '#default_value' => $settings['merchant_hashkey'],
+    '#required' => TRUE,
+  );
+  
+  $form['vendor_email'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Vendor Email',
+    '#description' => 'An e-mail address on which you can be contacted when a transaction completes.',
+    '#default_value' => $settings['vendor_email'],
+  );
+   
+  return $form;
+}
+
+/**
+ * Implements hook_redirect_form.
+ **/
+function commerce_veritrans_redirect_form($form, &$form_state, $order, $payment_method) {
+  // Return an error if the enabling action's settings haven't been configured.
+  if (empty($payment_method['settings']['merchant_id'])) {
+    drupal_set_message(t('Veritrans VT-Web Integration is not configured for use. Merchant ID has not been specified.'), 'error');
+    return array();
+  }
+
+  if (empty($payment_method['settings']['merchant_hashkey'])) {
+    drupal_set_message(t('Veritrans VT-Web Integration is not configured for use. Merchant Hash has not been specified.'), 'error');
+    return array();
+  }
+  
+  $settings = array(
+    // Return to the previous page when payment is canceled
+    'cancel_return' => url('checkout/' . $order->order_id . '/payment/back/' . $order->data['payment_redirect_key'], array('absolute' => TRUE)),
+
+    // Return to the payment redirect page for processing successful payments
+    'return' => url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE)),
+
+    // Specify the current payment method instance ID in the notify_url
+    'payment_method' => $payment_method['instance_id'],
+  );
+
+  return commerce_veritrans_order_form($form, $form_state, $order, $payment_method['settings'] + $settings);
+  
+
+}
+
+function commerce_veritrans_order_form($form, &$form_state, $order, $settings) {
+  $path = drupal_get_path('module','commerce_veritrans');
+  require_once ("./$path/veritrans.php");
+  $veritrans = New Veritrans();
+  $wrapper = entity_metadata_wrapper('commerce_order', $order);
+  $total = commerce_line_items_total($wrapper->commerce_line_items);
+  $settings += array('payment_method' => '');
+  $profile = commerce_customer_profile_load($order->commerce_customer_billing[LANGUAGE_NONE][0]['profile_id']);
+  $address = $profile->commerce_customer_address[LANGUAGE_NONE][0];
+  
+  $veritrans->settlement_type = '01';
+  $veritrans->merchant_id=$settings['merchant_id'];
+  $veritrans->merchant_hash_key = $settings['merchant_hashkey'];
+  $veritrans->order_id = $order->order_id;
+  $veritrans->session_id= $order->order_id;
+  //$veritrans->finish_payment_return_url =  $settings['return'];
+ // $veritrans->unfinish_payment_return_url =  $settings['cancel_return'];
+  //$veritrans->error_payment_return_url =  $settings['cancel_return'];
+  $veritrans->billing_address_different_with_shipping_address = '0';
+  $veritrans->first_name = $address['first_name'];
+  $veritrans->last_name = $address['last_name'];
+  $veritrans->address1 =  $address['thoroughfare'];
+  $veritrans->address2 = $address['premise'];
+  $veritrans->city =  $address['locality'];
+  $veritrans->country_code = "IDN";
+  $veritrans->postal_code = $address['postal_code'];
+  $veritrans->phone = '02111111';
+  $veritrans->email = $order->mail;
+  $veritrans->required_shipping_address = '0';
+  $veritrans->gross_amount= $total['amount'];
+
+  $commodities = _commerce_veritrans_add_commodities($order);
+  print_r($commodities);
+  $veritrans->commodity=$commodities;
+  $keys = $veritrans->get_keys();
+  print_r($keys);
+  $token_browser = $keys['token_browser'];
+  $token_merchant = $keys['token_merchant'];
+  $error_message = $keys['error_message'];
+ 
+  
+   $form['#action'] = Veritrans::PAYMENT_REDIRECT_URL;
+   $form['MERCHANT_ID'] = array('#type' => 'hidden', '#value' => $veritrans->merchant_id);
+   $form['ORDER_ID'] = array('#type' => 'hidden', '#value' => $veritrans->order_id);
+   $form['TOKEN_BROWSER'] = array('#type' => 'hidden', '#value' => $token_browser);
+ 
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Proceed to Veritrans'),
+  );
+
+  return $form;
+}
+
+
+
+/**
+ * Implements hook_redirect_form_validate
+ */
+function commerce_veritrans_redirect_form_validate($order, $payment_method){
+  // SagePay sends a callback to the site as a single encrypted string called Crypt
+  // this is appened to the success or failure URL.
+  $encrypted_response = $_GET['crypt'];
+  
+  // Now we have the encrypted response, we need to decrypt this using the same
+  // secret key that we used to send the request in the first place. 
+  // The secret key is stored in the payment method.
+  $enc_key = $payment_method['settings']['enc_key'];
+  if (!isset($enc_key)) {
+  	watchdog('commerce_veritrans', t('Cannot load SagePay key from payment method in order to decrypt response'), array(), WATCHDOG_ERROR);
+  	return FALSE;
+  }
+  
+  
+  
+  
+  // Validate the returned decrypted data 
+  if ($order_id != $order->order_id) {
+  	watchdog('commerce_veritrans', t('Returned order id does not match order for this session'), array(), WATCHDOG_ERROR);
+  	return FALSE;
+  }
+  
+  // Check for a valid status callback.
+  switch ($tokens['Status']) {
+      case 'ABORT' : 
+        watchdog('commerce_sagepay', 'ABORT error from SagePay for order %order_id', array('%order_id'=> $order_id), WATCHDOG_ALERT);
+        commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+        return FALSE;
+      case 'NOTAUTHED' : 
+        watchdog('commerce_sagepay', 'NOTAUTHED error from SagePay for order %order_id', array('%order_id'=> $order_id), WATCHDOG_ALERT);
+        commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+        return FALSE;
+      case 'REJECTED' : 
+        watchdog('commerce_sagepay', 'REJECTED error from SagePay for order %order_id', array('%order_id'=> $order_id), WATCHDOG_ALERT);
+        commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+        return FALSE;
+      case 'MALFORMED' :
+        watchdog('commerce_sagepay', 'MALFORMED error from SagePay for order %order_id', array('%order_id'=> $order_id), WATCHDOG_ALERT);
+        commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+        return FALSE;
+      case 'INVALID' : 
+        watchdog('commerce_sagepay', 'INVALID error from SagePay for order %order_id', array('%order_id'=> $order_id), WATCHDOG_ERROR);
+        commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+        return FALSE;
+      case 'ERROR' :
+        watchdog('commerce_sagepay', 'System ERROR from SagePay for order %order_id', array('%order_id'=> $order_id), WATCHDOG_ERROR);
+        commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+        return FALSE;
+      case 'OK' :
+        watchdog('commerce_sagepay', 'OK Payment callback received from SagePay for order %order_id with status code %status', array('%order_id'=> $order_id, '%status'=>$tokens['Status']));
+        break;
+      case 'AUTHENTICATED' :
+        watchdog('commerce_sagepay', 'AUTHENTICATED Payment callback received from SagePay for order %order_id with status code %status', array('%order_id'=> $order_id, '%status'=>$tokens['Status']));
+        break;
+      case 'REGISTERED' :
+        watchdog('commerce_sagepay', 'REGISTERED Payment callback received from SagePay for order %order_id with status code %status', array('%order_id'=> $order_id, '%status'=>$tokens['Status']));
+        break;
+      
+      default: 
+        // If the status code is anything other than those above, something has gone wrong so log an error and fail.
+        watchdog('commerce_sagepay', 'Unrecognised Status response from SagePay for order %order_id (%response_code)', array('%order_id' => $order_id, '%response_code' => $tokens['Status']), WATCHDOG_ERROR);
+        return FALSE;
+
+    }
+    
+  // Validation successful.
+  // Create a transaction and associate it with the order.
+   $arr_charge = array();
+   $arr_charge['amount'] = $tokens['Amount'] * 100; // convert back to commerce int
+   $arr_charge['currency_code'] = $order->commerce_order_total['und'][0]['currency_code']; 
+   
+   switch ($tokens['Status']) {
+     case 'OK':
+       commerce_veritrans_transaction($payment_method, $order, $arr_charge, $tokens, COMMERCE_PAYMENT_STATUS_SUCCESS);
+       break;
+     default: 
+       commerce_veritrans_transaction($payment_method, $order, $arr_charge, $tokens, COMMERCE_PAYMENT_STATUS_PENDING);
+   }     
+  
+  return TRUE;
+}
+
+
+
+/** 
+ * Create a transaction and associate it with an order
+ */
+function commerce_veritrans_transaction($payment_method, $order, $charge = array('amount' => 0, 'currency_code' => ''), $tokens, $transaction_status) {
+  
+  $transaction = commerce_payment_transaction_new('commerce_sagepay', $order->order_id);
+  $transaction->instance_id = $payment_method['instance_id'];
+  $transaction->amount = $charge['amount'];
+  $transaction->currency_code = $charge['currency_code'];
+  
+  // set a status for the payment - one of COMMERCE_PAYMENT_STATUS_SUCCESS, COMMERCE_PAYMENT_STATUS_PENDING or COMMERCE_PAYMENT_STATUS_FAILURE
+  $transaction->status = $transaction_status;
+  $transaction->message = 'Status @status, @statusdetail. VPSTxId=@vpstxid. Auth Code=@authcode. Address Check: @address. Postcode Check: @postcode. AVSCV2 Result: @avs. 3D Secure: @tds';
+  $transaction->message_variables = 
+    array(
+      '@status' => $tokens['Status'], 
+      '@statusdetail' => $tokens['StatusDetail'], 
+      '@vpstxid' => $tokens['VPSTxId'], 
+      '@authcode' => $tokens['TxAuthNo'], 
+      '@address' => $tokens['AddressResult'], 
+      '@postcode' => $tokens['PostCodeResult'], 
+      '@avs' => $tokens['AVSCV2'], 
+      '@tds' => $tokens['3DSecureStatus'], 
+    );
+  commerce_payment_transaction_save($transaction);
+
+}
+
+
+/**
+ * Encrypt the order details ready to send to SagePay Server 
+ **/
+function _commerce_veritrans_order($settings, $order, $total, $address) {
+
+  // add a random number to the transaction ID so that the order can be resubmitted to SagePage in the 
+  // event the user clicks back to modify the order before completing. (otherwise we SagePay rejects this
+  // as a duplicate)
+  $intRandNum = rand(0, 32000) * rand(0, 32000);
+  $strVendorTxCode = $order->order_id . "_" . $intRandNum;  
+  // set up an array of tokens to encrypt ready for SagePay
+  // note we append the redirect key from generated by commerce_payment_checkout.module
+  // so we can get the correct order on callback
+  
+  $redirect_key = $order->data['payment_redirect_key'];
+  
+  // convert commerce int to decimal
+  $order_amount = $total['amount'] / 100;
+  
+  // Check if we need to encoded cart.
+  $encoded_cart = '';
+  if ($settings['send_basket_contents'] == '1'){
+    $encoded_cart = _commerce_veritrans_cart_to_string($order);
+  }
+  
+  $query = array(
+    'VendorTxCode' => $strVendorTxCode,
+    'Amount' => $order_amount,
+    'Currency' => $total['currency_code'],
+    'Description' => $settings['order_description'],
+    'SuccessURL' => $settings['return'],
+    'FailureURL' => $settings['cancel_return'],
+    'CustomerName' => $address['first_name'] . " " . $address['last_name'],
+    'CustomerEmail' => $order->mail,
+    'VendorEmail' => $settings['vendor_email'], 
+    // 'SendEmail' => '',
+    'eMailMessage' => '',
+    'BillingSurname' => $address['last_name'],
+    'BillingFirstnames' => $address['first_name'],
+    'BillingAddress1' => $address['thoroughfare'],
+    'BillingAddress2' => $address['premise'],
+    'BillingCity' => $address['locality'],
+    'BillingPostcode' => $address['postal_code'],
+    'BillingCountry' => $address['country'],
+    // 'BillingState' => $address[''],
+    // 'BillingPhone' => $address['postal_code'],
+    'DeliverySurname' => $address['last_name'],
+    'DeliveryFirstnames' => $address['first_name'],
+    'DeliveryAddress1' => $address['thoroughfare'],
+    'DeliveryAddress2' => $address['premise'],
+    'DeliveryCity' => $address['locality'],
+    'DeliveryPostcode' => $address['postal_code'],
+    'DeliveryCountry' => $address['country'],
+    // 'DeliveryState' => $address[''],
+    // 'DeliveryPhone' => $address[''],
+    'Basket' => $encoded_cart,
+    // 'AllowGiftAid' => '',
+    'ApplyAVSCV2' => $settings['apply_avs_cv2'],
+    'Apply3DSecure' => $settings['apply_3d_secure'],
+    // 'BillingAgreement' => '',
+    
+  );
+
+  $keys = array_keys($query);
+  $query_string = '';
+  foreach($keys as $key){
+    $query_string .= $key . '=' . $query[$key] . '&';
+  }
+  $query_string = substr($query_string, 0, strlen($query_string) -1);
+
+  
+}
+
+
+/** 
+ * Convert a commerce order to a string in a format suitable to
+ * send to SagePay.
+ */
+function _commerce_veritrans_add_commodities($order){
+  $order_string = '';
+  
+  // Load an array of line items from the order.
+  $order_lines = $order->commerce_line_items['und'];
+  
+  // Determine the total number of lines - this is the first component of the string we send to SagePay.
+  $total_lines = sizeof($order_lines);
+  $order_string = $total_lines . ':';
+  $commodities=array();
+  // Encode each order line and add to the string.
+  for ($line = 0; $line < $total_lines; $line++){
+    //$order_string .= _commerce_veritrans_line_item_to_string($order_lines[$line]['line_item_id']);
+    $line_item_id = $order_lines[$line]['line_item_id'];
+    $line_item = commerce_line_item_load($line_item_id);
+    $commodities[] = array(
+        "COMMODITY_ID" => $line_item_id,
+        "COMMODITY_PRICE" =>  $line_item->commerce_unit_price['und'][0]['data']['components'][0]['price']['amount'] ,
+        "COMMODITY_QTY" => number_format($line_item->quantity,0,'',''),
+        "COMMODITY_NAME1" => $line_item->line_item_label,
+        "COMMODITY_NAME2" => $line_item->line_item_label
+      );
+  }
+  
+  // Trim off the last excess colon
+  // $order_string = substr($order_string, 0, strlen($order_string) -1);
+  // print_r($order_string);
+  return $commodities;
+}
+
+/**
+ * Convert a commerce line item to a string in a format suitable to 
+ * send to SagePay.
+ */
+function _commerce_veritrans_line_item_to_string($line_item_id){
+  
+  // Load the line item ID
+  // $line_item = commerce_line_item_load($line_item_id);
+  
+  // $description = $line_item->line_item_label;
+  
+  // // remove any colons from the line description as we need this as a delimiter.
+  // $description = str_ireplace(':', ' ', $description);
+  
+  // $quantity = $line_item->quantity;
+  
+  // // Get the price components for the order line.  
+  // $item_value = $line_item->commerce_unit_price['und'][0]['data']['components'][0]['price']['amount'] / 100;
+  // if (isset($line_item->commerce_unit_price['und'][0]['data']['components'][1])) {
+  //   $item_tax = $line_item->commerce_unit_price['und'][0]['data']['components'][1]['price']['amount'] / 100;
+  // } else {
+  //   $item_tax = '---';
+  // }
+  // $item_total = $line_item->commerce_unit_price['und'][0]['amount'] / 100;
+  // $line_total = $line_item->commerce_total['und'][0]['amount'] / 100;
+  
+  // return $description . ':' . $quantity . ':' . $item_value . ':' . $item_tax . ':' . $item_total . ':' . $line_total . ':';
+}
