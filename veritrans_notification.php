@@ -42,6 +42,7 @@ class VeritransNotification
   function __construct($params = null) 
   {
     if(is_null($params)) {
+      var_dump(file_get_contents('php://input'));
       $params = json_decode(file_get_contents('php://input')); 
     }
 
