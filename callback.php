@@ -16,25 +16,27 @@ echo "haihaiahai";
     }
 
 
-if (veritrans_notification->TOKEN_MERCHANT==$token_merchant)
+if ($veritrans_notification->TOKEN_MERCHANT==$token_merchant)
 {
     
+     $transaction = commerce_payment_transaction_new('commerce_veritrans', $order->order_id); 
   
     if ($veritrans_notification->mStatus=="success"){
-
-   // 	 commerce_veritrans_transaction($payment_method, $order, $arr_charge, $tokens, COMMERCE_PAYMENT_STATUS_SUCCESS);
+      $transaction->status = "COMMERCE_PAYMENT_STATUS_SUCCESS";
        echo "transaksi berhasil";
 
-    } else if ($veritrans_notification->mStatus=="success"){
+    } else if ($veritrans_notification->mStatus=="failure"){
 
-   // 	commerce_veritrans_transaction($payment_method, $order, array(), $tokens, COMMERCE_PAYMENT_STATUS_FAILURE);
+    	$transaction->status = "COMMERCE_PAYMENT_STATUS_FAILURE";
       echo "transaksi gagal";
 
     }else{
 
-   // 	commerce_veritrans_transaction($payment_method, $order, $arr_charge, $tokens, COMMERCE_PAYMENT_STATUS_PENDING);
+    	$transaction->status = "COMMERCE_PAYMENT_STATUS_PENDING";
       echo "transaksi pending";
     }
+
+    commerce_payment_transaction_save($transaction);
 
 }else{
   echo "Token Merchant tidak sesuai";

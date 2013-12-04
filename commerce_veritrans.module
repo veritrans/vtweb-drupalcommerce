@@ -140,10 +140,10 @@ function commerce_veritrans_order_form($form, &$form_state, $order, $settings) {
     'token_browser' => $token_browser,
     'token_merchant'=> $token_merchant
     );
-   //commerce_veritrans_addToken($dataToken);
+   commerce_veritrans_addToken($dataToken);
 
-  //$payment_method = commerce_veritrans_commerce_payment_method_info();
- // commerce_veritrans_transaction($payment_method, $order, array(), COMMERCE_PAYMENT_STATUS_PENDING);
+  $payment_method = commerce_veritrans_commerce_payment_method_info();
+ commerce_veritrans_transaction($payment_method, $order, array(), COMMERCE_PAYMENT_STATUS_PENDING);
 
    $form['#action'] = Veritrans::PAYMENT_REDIRECT_URL;
    $form['MERCHANT_ID'] = array('#type' => 'hidden', '#value' => $veritrans->merchant_id);

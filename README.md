@@ -1,114 +1,47 @@
- Veritrans Weblink Type PHP integration library 
-==============================================
+ Veritrans VT-Web Drupal Commerce integration library
+====================================================
 
 ## How to use
 
-###STEP 1 : Requesting key
+###STEP 1 : Installing Veritrans Modules
 
-Given you already have cart ready for checkout.
-We create a veritrans instance
-
-```
-$veritrans = new Veritrans;
-$veritrans->settlement_type = '01';
-$veritrans->merchant_id = 'T100000000000001000001';
-$veritrans->merchant_hash_key = '305e0328a366cbce8e17a385435bb7eb3f0cbcfbfc0f1c3ef56b658';
-$veritrans->order_id = 'your_unique_order_id';
-$veritrans->session_id = 'your_application_session_id';
-$veritrans->gross_amount = '150000';
-$veritrans->card_capture_flag = '1';
-$veritrans->billing_address_different_with_shipping_address = 1;
-$veritrans->required_shipping_address = 0;
-
-```
-
-**dont forget to set your commodity**
-
-```
-$commodities =  array (
-						array("COMMODITY_ID" => 'sku1', "COMMODITY_PRICE" => '10000', 
-							  "COMMODITY_QTY" => '2', 
-						      "COMMODITY_NAME1" => 'Kaos', "COMMODITY_NAME2" => 'T-Shirt'),
-						array("COMMODITY_ID" => 'sku2', "COMMODITY_PRICE" => '20000', 
-							  "COMMODITY_QTY" => '1', 
-						      "COMMODITY_NAME1" => 'Celana', "COMMODITY_NAME2" => 'Pants')
-						);
-						
-$veritrans->commodity = $commodities;
-
-```
-
-**request for a key**
-
-```
-$key = $veritrans->get_keys();
-```
+**Login to drupal commerce using your admin account**
+**Click on Modules Tab**
+**Select Install New Module**
+**Then, upload this zip folder and click Install**
+**If this step works, skip STEP 2**
 
 
-**save order infomation and keys to your database**
+###STEP 2 :  Installing Veritrans Modules
 
-```
-$data = array(
-  'order_id'    => $order_id,
-  'session_id'  => $this->session->userdata('session_id'),
-  'amount'      => $this->cart->total(),
-  'token_browser' => $key['token_browser'],
-  'token_merchant'=> $key['token_merchant']
-);
-```
-
-**In this sample, we're assuming that we use CodeIgniter ActiveRecord**
-
-```
-$this->db->insert('orders', $data);
-```
-
-###STEP 2 :  Redirect user to Veritrans payment page
-
-**Prepare the FORM to redirect the customer**
-
-```
-<html>
-<head>
-	<title>Redirecting to Veritrans</title>
-</head>
-<body>	
-	<form action="<?= Veritrans::PAYMENT_REDIRECT_URL ?>" method="post" id='form'  onSubmit="document.getElementById('submitBtn').disabled=true;">
-  	<input type="hidden" name="MERCHANT_ID" value="<?= $merchant_id ?>" />
-  	<input type="hidden" name="ORDER_ID" value="<?= $order['order_id'] ?>" />
-  	<input type="hidden" name="TOKEN_BROWSER" value="<?= $key['token_browser'] ?>" />
-  	<input id="submitBtn" type="submit" value="Confirm Checkout" />
-	</form>
-	
-	<script language="javascript" type="text/javascript">
-		  window.onload = function() {
-		    document.getElementById("form").submit();
-		  }
-	</script>	
-	
-</body>
-</html>
-```
+**Extract this zip folder**
+**Copy and Paste manually to sites/all/modules**
 
 
-###STEP 3 : Responding Veritrans Payment Notification
-After the payment is completed
-Veritrans will contact Merchant's web server
-As Merchant, you need to response this query
-@TODO Validate request from veritrans, make sure it comes from veritrans not from hacker
- 
-**Create Veritrans Notification instance**
+###STEP 3 : Activating Veritrans Modules
 
-```
-$veritrans_notification = new VeritransNotification($_POST);
-```
+**After installation process is complete, go to Modules page**
+**Give check list on Veritrans VT-Web's field**
+**Save Configuration**
 
-**Check if valid**
+###STEP 4 : Setting Configuration for Veritrans Modules
 
-```
-if($order->token_merchant != $veritrans_notification->TOKEN_MERCHANT){
-  echo "ERR";
-  $this->db->insert('payment_notifications', array("params" => 'no match'));
-  exit();
-}
-```
+**Click on Configure Store**
+**Select Payment Method**
+**Click Credit Card (Via Veritrans) -> Enable Payment Method**
+**Enter your Merchant ID, Merchant Hashkey, and email**
+**Save**
+
+###STEP 5 : Preparing Database for Veritrans Modules
+
+**Find tokens.sql in this zip folder**
+**Import it on your database**
+
+###STEP 6 : Setting Callback URL
+
+**Login to veritrans.co.id**
+**Go to Setting Page**
+**Fill the redirection's field with [you shop's url]/sites/all/modules/commerce_veritrans/callback.php**
+**Save the configuration**
+
+
