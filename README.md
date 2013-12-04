@@ -1,6 +1,6 @@
-<<<<<<< HEAD
- Veritrans VT-Web Drupal Commerce integration library
-====================================================
+
+ Veritrans VT-Web Drupal Commerce 
+==================================
 
 ## How to use
 
@@ -46,9 +46,3 @@
 **Save the configuration**
 
 
-=======
-vtweb-drupalcommerce
-====================
-
-Drupal Commerce Veritrans integration library
->>>>>>> b8b4c59fb6dfd3a7e91db0eb4aa6bcf807d7a262
