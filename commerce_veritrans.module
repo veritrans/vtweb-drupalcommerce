@@ -132,6 +132,14 @@ function commerce_veritrans_process_ipn() {
       $transaction->message = 'Cancel, payment canceled';
       
     }
+    elseif ($transaction_status == 'expire') {
+      
+      $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
+      $transaction->amount = -($transaction->amount);
+      commerce_order_status_update($order, $name = 'canceled', $skip_save = FALSE, $revision = TRUE);
+      $transaction->message = 'Expire, payment expired';
+      
+    }
     elseif ($transaction_status == 'deny') {
       $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
       commerce_order_status_update($order, $name = 'canceled', $skip_save = FALSE, $revision = TRUE);
