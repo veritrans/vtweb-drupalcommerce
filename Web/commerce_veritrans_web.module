@@ -342,6 +342,10 @@ function commerce_veritrans_web_order_form($form, &$form_state, $order, $setting
       'finish_redirect_url' => $settings['return'],
       'unfinish_redirect_url' => $settings['cancel_return'],
       'error_redirect_url' => $settings['cancel_return'],
+      'credit_card' => array(
+          'channel' => 'migs',
+          'bank' => 'bca',
+        ),
     ),
     'transaction_details' => array(
       'order_id' => $order->order_id,
