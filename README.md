@@ -1,12 +1,12 @@
-Veritrans Drupal Commerce VT-WEB Payment Gateway Module
+Midtrans Drupal Commerce Midtrans Payment Gateway Module
 =======================================================
 
-Veritrans :heart: Drupal!
+Midtrans :heart: Drupal!
 
-Let your Drupal Commerce store integrated with Veritrans VT-WEB payment gateway.
+Let your Drupal Commerce store integrated with Midtrans payment gateway.
 
 ### Description
-This is the official Veritrans extension for the Drupal Commerce E-commerce platform.
+This is the official Midtrans extension for the Drupal Commerce E-commerce platform.
 
 ### Version
 7.x-1.1 
@@ -50,8 +50,8 @@ The manual installation method involves downloading our feature-rich plugin and 
 3. Insert ``http://[your web]`` link as Finish/Unfinish/Error Redirect URL in your MAP configuration.
 
 #### Get help
-* [Veritrans sandbox login](https://my.sandbox.veritrans.co.id/)
-* [Veritrans sandbox registration](https://my.sandbox.veritrans.co.id/register)
-* [Veritrans registration](https://my.veritrans.co.id/register)
-* [Veritrans documentation](http://docs.veritrans.co.id)
-* Technical support [support@veritrans.co.id](mailto:support@veritrans.co.id)
+* [Midtrans sandbox login](https://dashboard.sandbox.midtrans.com)
+* [Midtrans production login](https://dashboard.midtrans.com)
+* [Midtrans registration](https://account.midtrans.com/register)
+* [Midtrans documentation](http://docs.midtrans.com)
+* Technical support [support@midtrans.com](mailto:support@midtrans.com)

@@ -1,12 +1,13 @@
 <?php
 
-class VeritransVtWebTest extends PHPUnit_Framework_TestCase
+class VeritransSnapTest extends PHPUnit_Framework_TestCase
 {
 
-    public function testGetRedirectionUrl() {
+    public function testGetSnapToken() {
       Veritrans_Config::$serverKey = 'My Very Secret Key';
       VT_Tests::$stubHttp = true;
-      VT_Tests::$stubHttpResponse = '{ "status_code": 200, "redirect_url": "http://host.com/pay" }';
+      VT_Tests::$stubHttpResponse = '{ "token": "abcdefghijklmnopqrstuvwxyz" }';
+      VT_Tests::$stubHttpStatus = array('http_code' => 201);
 
       $params = array(
         'transaction_details' => array(
@@ -15,13 +16,13 @@ class VeritransVtWebTest extends PHPUnit_Framework_TestCase
         )
       );
 
-      $paymentUrl = Veritrans_Vtweb::getRedirectionUrl($params);
+      $tokenId = Veritrans_Snap::getSnapToken($params);
 
-      $this->assertEquals($paymentUrl, "http://host.com/pay");
+      $this->assertEquals($tokenId, "abcdefghijklmnopqrstuvwxyz");
 
       $this->assertEquals(
         VT_Tests::$lastHttpRequest["url"],
-        "https://api.sandbox.midtrans.com/v2/charge"
+        "https://app.sandbox.midtrans.com/snap/v1/transactions"
       );
 
       $this->assertEquals(
@@ -33,7 +34,7 @@ class VeritransVtWebTest extends PHPUnit_Framework_TestCase
 
       $this->assertEquals($fields["POST"], 1);
       $this->assertEquals($fields["POSTFIELDS"],
-        '{"payment_type":"vtweb","vtweb":{"credit_card_3d_secure":false},' . 
+        '{"credit_card":{"secure":false},' .
         '"transaction_details":{"order_id":"Order-111","gross_amount":10000}}'
       );
     }
@@ -47,9 +48,10 @@ class VeritransVtWebTest extends PHPUnit_Framework_TestCase
       );
 
       VT_Tests::$stubHttp = true;
-      VT_Tests::$stubHttpResponse = '{ "status_code": 200, "redirect_url": "http://host.com/pay" }';
+      VT_Tests::$stubHttpResponse = '{ "token": "abcdefghijklmnopqrstuvwxyz" }';
+      VT_Tests::$stubHttpStatus = array('http_code' => 201);
 
-      $paymentUrl = Veritrans_Vtweb::getRedirectionUrl($params);
+      $tokenId = Veritrans_Snap::getSnapToken($params);
 
       $this->assertEquals(
         VT_Tests::$lastHttpRequest['data_hash']['transaction_details']['gross_amount'],
@@ -59,19 +61,20 @@ class VeritransVtWebTest extends PHPUnit_Framework_TestCase
 
     public function testOverrideParams() {
       $params = array(
-        'vtweb' => array(
-          'extra' => 'param'
+        'echannel' => array(
+          'bill_info1' => 'bill_value1'
         )
       );
 
       VT_Tests::$stubHttp = true;
-      VT_Tests::$stubHttpResponse = '{ "status_code": 200, "redirect_url": "http://host.com/pay" }';
+      VT_Tests::$stubHttpResponse = '{ "token": "abcdefghijklmnopqrstuvwxyz" }';
+      VT_Tests::$stubHttpStatus = array('http_code' => 201);
 
-      $paymentUrl = Veritrans_Vtweb::getRedirectionUrl($params);
+      $tokenId = Veritrans_Snap::getSnapToken($params);
 
       $this->assertEquals(
-        VT_Tests::$lastHttpRequest['data_hash']["vtweb"],
-        array("credit_card_3d_secure" => false, "extra" => "param")
+        VT_Tests::$lastHttpRequest['data_hash']['echannel'],
+        array('bill_info1' => 'bill_value1')
       );
     }
 
@@ -84,7 +87,7 @@ class VeritransVtWebTest extends PHPUnit_Framework_TestCase
       );
 
       try {
-        $paymentUrl = Veritrans_Vtweb::getRedirectionUrl($params);
+        $tokenId = Veritrans_Snap::getSnapToken($params);
       } catch (Exception $error) {
         $errorHappen = true;
         $this->assertContains(
