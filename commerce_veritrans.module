@@ -33,6 +33,8 @@ function commerce_veritrans_libraries_info() {
         'VtDirect.php',
         'VtWeb.php',
         'Sanitizer.php',
+        'Snap.php',
+        'SnapApiRequestor.php',
       ),
     ),
   );

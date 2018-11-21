@@ -3,5 +3,5 @@
 ?>
 
 <form action="<?php echo $base ?>/checkout-process.php" method="GET">
-  <input type="submit" value="Pay with VT-Web">
+  <input type="submit" value="Pay with Snap Redirect">
 </form>
